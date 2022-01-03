@@ -17,10 +17,13 @@
 
 ### Reference
 
+WSDM 2021 CUP
 * https://www.wsdm-conference.org/2022/call-for-wsdm-cup-proposals/
 * https://www.dgl.ai/WSDM2022-Challenge/
 * https://github.com/dglai/WSDM2022-Challenge
 
+Link Prediction
+* https://stellargraph.readthedocs.io/en/stable/demos/link-prediction/ctdne-link-prediction.html
 
 
 
