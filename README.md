@@ -3,7 +3,16 @@
 # WSDM Cup 2022
 
 
+### Keywords
+* Link Prediction
+* Temporal Graph Neural Networks
+* Continuous-Time
+
+
 ### Overview
+.
+
+
 
 
 ### Reference
@@ -11,6 +20,9 @@
 * https://www.wsdm-conference.org/2022/call-for-wsdm-cup-proposals/
 * https://www.dgl.ai/WSDM2022-Challenge/
 * https://github.com/dglai/WSDM2022-Challenge
+
+
+
 
 
 
