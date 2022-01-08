@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # Download Datasets
     # -----------------
 
-    data_dir = 'data/wsdm-2022'
+    data_dir = 'data/wsdm-2022/raw'
     host_url = 'https://data.dgl.ai/dataset/WSDMCup2022'
 
     if not os.path.exists(f'{data_dir}/train'):
