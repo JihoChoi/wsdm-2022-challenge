@@ -38,6 +38,21 @@ class LargeGraphDataset(Dataset):
         file_name_list = []
         for index, date in enumerate(pd.date_range(date_start, date_end)):
             file_name_list.append(f'graph_{index}')
+
+        """
+        TODO: if not set
+        date_set = set()
+        with open(f"{self.root}/raw/train/edges_train_A.csv", mode='r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                date = datetime.datetime.fromtimestamp(int(row[3]))
+                date = date.strftime("%Y%m%d")  # %H:%M:%S
+                date_set.add(date)
+        file_name_list = []
+        for index, date in enumerate(sorted(list(date_set))):
+            file_name_list.append(f'graph_{index}')
+        """
+
         # print("file_name_list:", len(file_name_list), file_name_list[0])
         return file_name_list
 
@@ -45,12 +60,12 @@ class LargeGraphDataset(Dataset):
         print("---------------")
         print("    process    ")
         print("---------------")
-        DATA_DIR = self.root
+        # DATA_DIR = self.root
 
         # ---------------- edge_type_features.csv ----------------
 
         edge_type_feature_dict = {}
-        with open(f"{DATA_DIR}/raw/train/edge_type_features.csv", mode='r') as file:
+        with open(f"{self.root}/raw/train/edge_type_features.csv", mode='r') as file:
             reader = csv.reader(file)
             for row in reader:
                 row = list(map(lambda x: int(x), row))
@@ -60,7 +75,7 @@ class LargeGraphDataset(Dataset):
         # ---------------- node_features.csv ----------------
 
         node_feature_dict = {}
-        with open(f"{DATA_DIR}/raw/train/node_features.csv", mode='r') as file:
+        with open(f"{self.root}/raw/train/node_features.csv", mode='r') as file:
             reader = csv.reader(file)
             for row in reader:
                 row = list(map(lambda x: int(x), row))
@@ -71,15 +86,18 @@ class LargeGraphDataset(Dataset):
         # ---------------- edges_train_A.csv ----------------
 
         edge_list_df = pd.read_csv(
-            f"{DATA_DIR}/raw/train/edges_train_A.csv", header=None,
+            f"{self.root}/raw/train/edges_train_A.csv", header=None,
             names=['src_id', 'dst_id', 'edge_type', 'timestamp'],
-            dtype={'src_id': int, 'dst_id': int,
-                   'edge_type': int, 'timestamp': int},
+            dtype={
+                'src_id': int, 'dst_id': int, 'edge_type': int, 'timestamp': int
+            },
         ).sort_values('timestamp')
         edge_list_df['date'] = edge_list_df['timestamp'].apply(
             lambda x: datetime.datetime.fromtimestamp(x).strftime("%Y%m%d")
         )
         grouped_df = edge_list_df.groupby('date')
+
+        # ---------------- Preprocess ----------------
 
         for index, (date, group) in enumerate(grouped_df):
             group = group.reset_index(drop=True)
@@ -93,12 +111,13 @@ class LargeGraphDataset(Dataset):
             node_index_mapper.fit(
                 pd.concat([source_nodes, target_nodes], axis=0)
             )
+
             source_nodes = node_index_mapper.transform(source_nodes)
             target_nodes = node_index_mapper.transform(target_nodes)
 
             # ------------ edge_index ------------
             edge_index = torch.tensor(
-                [source_nodes, target_nodes], dtype=torch.long
+                np.array([source_nodes, target_nodes]), dtype=torch.long
             )
 
             # ------------ node_features ------------
