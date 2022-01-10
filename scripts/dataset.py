@@ -117,10 +117,11 @@ class LargeGraphDataset(Dataset):
             edge_attrs = [
                 edge_type_feature_dict[edge_type] for edge_type in edge_type_series
             ]
+            edge_attrs = torch.tensor(edge_attrs, dtype=torch.long)
+
             edge_labels = torch.tensor(
                 [timestamp_series, edge_type_series], dtype=torch.long
-            )
-            edge_labels = edge_labels.transpose(0, 1)
+            ).transpose(0, 1)
 
             data = Data(
                 x=x,
@@ -150,7 +151,7 @@ if __name__ == '__main__':
 
     edge_index = torch.tensor(
         [[0, 1, 1, 2],
-        [1, 0, 2, 1]], dtype=torch.long
+         [1, 0, 2, 1]], dtype=torch.long
     )
     x = torch.tensor([[-1], [0], [1]], dtype=torch.float)
 

@@ -69,8 +69,8 @@ if __name__ == '__main__':
 
     for data in dataloader:
         print(data)
-        print("data.edge_index:", data.edge_index[0])
-        print("data.edge_attrs:", data.edge_attrs[0])
+        print("data.edge_index:", data.edge_index.shape)
+        print("data.edge_attrs:", data.edge_attrs.shape)
         break
 
 
