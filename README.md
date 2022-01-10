@@ -7,7 +7,7 @@
 * Link Prediction
 * Temporal Graph Neural Networks
 * Continuous-Time
-
+* Variational Time Embedding
 
 ### Overview
 .
@@ -22,9 +22,14 @@ WSDM 2021 CUP
 * https://www.dgl.ai/WSDM2022-Challenge/
 * https://github.com/dglai/WSDM2022-Challenge
 
-Link Prediction
-* https://stellargraph.readthedocs.io/en/stable/demos/link-prediction/ctdne-link-prediction.html
+PyTorch Geometric
+* https://towardsdatascience.com/hands-on-graph-neural-networks-with-pytorch-pytorch-geometric-359487e221a8
+* https://github.com/pyg-team/pytorch_geometric/blob/master/examples/autoencoder.py
 
+Link Prediction
+* https://github.com/snap-stanford/ogb/blob/master/examples/linkproppred/ppa/gnn.py
+* https://stellargraph.readthedocs.io/en/stable/demos/link-prediction/ctdne-link-prediction.html
+* https://paperswithcode.com/task/link-prediction
 
 
 
@@ -43,7 +48,7 @@ $ source ./env/bin/activate
 # (env)
 pip install --upgrade pip
 
-# -----------------------------------
+# -----------------------------------~~~~
 #     PyTorch / PyTorch Geometric
 # -----------------------------------
 nvidia-smi

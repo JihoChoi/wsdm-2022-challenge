@@ -3,11 +3,8 @@ import os.path as osp
 import datetime
 import csv
 from tqdm import tqdm
-import numpy as np
-import pandas as pd
 
-from sklearn.preprocessing import LabelEncoder
-# from torch_geometric.utils import sort_edge_index
+import pandas as pd
 
 import torch
 from torch_geometric.data import Data
@@ -17,7 +14,7 @@ from torch_geometric.data import Dataset, download_url
 class LargeGraphDataset(Dataset):
     # https://pytorch-geometric.readthedocs.io/en/latest/notes/create_dataset.html
     def __init__(self, root="./data/wsdm-2022"):
-        print("(__init__) root:", root)
+        print("__init__ (Dataset), root:", root)
         self.root = root  # DATA_DIR
         # self.processed_paths = f"{self.root}/processed"
 
@@ -30,15 +27,15 @@ class LargeGraphDataset(Dataset):
         # print("--------------------")
         # print("processed_file_names")
         # print("--------------------")
-        # self.processed_paths, self.processed_file_names
 
-        # TODO: handle empty dates -> list of existing dates
         date_start = datetime.datetime.strptime("20141019", "%Y%m%d")
         date_end = datetime.datetime.strptime("20170514", "%Y%m%d")
         file_name_list = []
         for index, date in enumerate(pd.date_range(date_start, date_end)):
             file_name_list.append(f'graph_{index}')
-        # print("file_name_list:", len(file_name_list), file_name_list[0])
+
+        # print(f"len: {len(file_name_list)}")
+        # print(f"file_name_list[0]: {file_name_list[0]}")
         return file_name_list
 
     def process(self):
@@ -48,7 +45,6 @@ class LargeGraphDataset(Dataset):
         DATA_DIR = self.root
 
         # ---------------- edge_type_features.csv ----------------
-
         edge_type_feature_dict = {}
         with open(f"{DATA_DIR}/raw/train/edge_type_features.csv", mode='r') as file:
             reader = csv.reader(file)
@@ -81,55 +77,27 @@ class LargeGraphDataset(Dataset):
         )
         grouped_df = edge_list_df.groupby('date')
 
+        file_name_list = []
         for index, (date, group) in enumerate(grouped_df):
             group = group.reset_index(drop=True)
 
             source_nodes = group['src_id']
             target_nodes = group['dst_id']
-            timestamp_series = group['timestamp']
-            edge_type_series = group['edge_type']
+            timestamp = group['timestamp']
+            edge_type = group['edge_type']
 
-            node_index_mapper = LabelEncoder()  # sorter: compress edge index
-            node_index_mapper.fit(
-                pd.concat([source_nodes, target_nodes], axis=0)
-            )
-            source_nodes = node_index_mapper.transform(source_nodes)
-            target_nodes = node_index_mapper.transform(target_nodes)
-
-            # ------------ edge_index ------------
             edge_index = torch.tensor(
                 [source_nodes, target_nodes], dtype=torch.long
             )
 
-            # ------------ node_features ------------
-            max_index = np.amax((source_nodes, target_nodes))
-            # print("max_index:", max_index)
-            node_indexes = node_index_mapper.inverse_transform(
-                list(range(0, max_index + 1))
-            )
-            node_features = [
-                node_feature_dict[node_index] for node_index in node_indexes
-            ]
-            # x = torch.LongTensor(node_features)
-            x = torch.tensor(node_features, dtype=torch.long)
+            # TODO: node features
+            # TODO: edge features
+            # edge_type_features[edge_type_features['edge_type']==0].values.tolist()[0]
 
-            # ------------ edge_attrs / edge_labels ------------
-            edge_attrs = [
-                edge_type_feature_dict[edge_type] for edge_type in edge_type_series
-            ]
-            edge_labels = torch.tensor(
-                [timestamp_series, edge_type_series], dtype=torch.long
-            )
-            edge_labels = edge_labels.transpose(0, 1)
+            edge_attrs = torch.tensor([timestamp, edge_type], dtype=torch.long)
+            edge_attrs = edge_attrs.transpose(0, 1)
 
-            data = Data(
-                x=x,
-                edge_index=edge_index,
-                edge_attrs=edge_attrs,
-                edge_labels=edge_labels
-            )
-            print("dataset:", data) if index == 0 else None
-
+            data = Data(edge_index=edge_index, edge_attrs=edge_attrs)
             torch.save(data, f"{self.processed_paths[index]}")
 
     def len(self):
@@ -137,7 +105,7 @@ class LargeGraphDataset(Dataset):
 
     def get(self, index):
         # data = torch.load(f"{self.root}/processed/train/graph_{index}.pt")
-        # data = torch.load(osp.join(self.processed_dir, f'data_{index}.pt'))
+        # data = torch.load(osp.join(self.processed_dir, f'graph_{index}.pt'))
         data = torch.load(self.processed_paths[index])
         return data
 
