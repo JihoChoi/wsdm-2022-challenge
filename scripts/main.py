@@ -302,8 +302,8 @@ if __name__ == '__main__':
             print("val:", exist_prob)
             print("np.unique(label, return_counts=True):", np.unique(label, return_counts=True))
             AUC = roc_auc_score(label, exist_prob)
-            print(f'\nAUC is {round(AUC, 5)}'
-                f"Acc: {int(correct.item())}/{len(exist_prob)} = {correct.item() / len(prob)}"
+            print(f'\nAUC is {round(AUC, 5)} '
+                f"Acc: {int(correct.item())}/{len(exist_prob)} = {correct.item() / len(exist_prob)}"
             )
 
             # TODO: Write results for test set
