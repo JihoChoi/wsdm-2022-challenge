@@ -26,7 +26,7 @@ class LargeGraphDataset():
         if dataset_name in ['a', 'A']:
             dataset = LargeGraphDatasetA(root="./data/wsdm-2022")
         elif dataset_name in ['b', 'B']:
-            dataset = LargeGraphDataB(root="./data/wsdm-2022")
+            dataset = LargeGraphDatasetB(root="./data/wsdm-2022")
         else:
             print("ERROR: @LargeGraphDataset")
         return dataset
@@ -36,8 +36,7 @@ class LargeGraphDataset():
 # -----------------------------------------------------------------------------
 
 
-class LargeGraphDataB(Dataset):
-    # Transductive Setting
+class LargeGraphDatasetB(Dataset):
     def __init__(self, root="./data/wsdm-2022"):
         print("(__init__) root:", root)
         self.root = root  # DATA_DIR
@@ -48,7 +47,12 @@ class LargeGraphDataB(Dataset):
     @property
     def processed_file_names(self):
         # $ head -n 200 ./data/wsdm-2022/raw/train/edges_train_B.csv
-        return [f'dataset_b/large_graph.pt']
+        date_start = datetime.datetime.strptime("20150101", "%Y%m%d")
+        date_end = datetime.datetime.strptime("20151001", "%Y%m%d")
+        file_name_list = []
+        for index, date in enumerate(pd.date_range(date_start, date_end)):
+            file_name_list.append(f'dataset_b/graph_{index}.pt')
+        return file_name_list
 
     def process(self):
         def extract_edge_feature(records):
@@ -65,6 +69,7 @@ class LargeGraphDataB(Dataset):
                     pass
             return torch.FloatTensor(np.array(feat_list).astype('float32'))
 
+
         print("------------------")
         print("    process (B)   ")
         print("------------------")
@@ -76,55 +81,84 @@ class LargeGraphDataB(Dataset):
                    'timestamp', 'edge_features'],
             dtype={
                 'src_id': int, 'dst_id': int,
-                'edge_type': int, 'timestamp': int, 'edge_features': str,
+                'edge_type': int, 'timestamp': int,
+                'edge_features': str,
             },
             # nrows=2200,  # DEV MODE
         ).sort_values('timestamp')
-        edge_list_df['edge_features'] = edge_list_df['edge_features'].astype(str)
-
-        # edge_list_df['date'] = edge_list_df['timestamp'].apply(
-        #     lambda x: datetime.datetime.fromtimestamp(x).strftime("%Y%m%d")
-        # )
-        # grouped_df = edge_list_df.groupby('date')
+        edge_list_df['edge_features'] = edge_list_df[
+            'edge_features'
+        ].astype(str)
+        edge_list_df['date'] = edge_list_df['timestamp'].apply(
+            lambda x: datetime.datetime.fromtimestamp(x).strftime("%Y%m%d")
+        )
+        grouped_df = edge_list_df.groupby('date')
 
         # Graph Properties
         num_nodes = int(
             max(edge_list_df['src_id'].max(), edge_list_df['dst_id'].max())
-        ) + 1
-        num_relations = int(edge_list_df['edge_type'].max()) + 1
+        )
+        num_relations = int(edge_list_df['edge_type'].max())
+
+        # print(edge_list_df['edge_features'])
+        # print(extract_edge_feature(edge_list_df['edge_features']).shape)
+        # exit()
 
         print("num_nodes     :", num_nodes)
         print("num_relations :", num_relations)
 
+        # ---------------- Preprocess ----------------
+
+        # Transductive Setting
         edge_type_series = edge_list_df['edge_type']
         timestamp_series = edge_list_df['timestamp']
         edge_types = torch.tensor(edge_type_series, dtype=torch.long)
         edge_timestamps = torch.tensor(timestamp_series, dtype=torch.long)
 
-        source_nodes = edge_list_df['src_id']
-        target_nodes = edge_list_df['dst_id']
-
-        edge_index = torch.tensor(
-            np.array([source_nodes, target_nodes]), dtype=torch.long
+        torch.save(
+            edge_types,
+            f"{self.root}/processed/dataset_b/edge_types.pt"
+        )
+        torch.save(
+            edge_timestamps,
+            f"{self.root}/processed/dataset_b/edge_timestamps.pt"
         )
 
-        # data = HeteroData()  # TODO: Heterogeneous Graph
-        data = Data(
-            # x=x,  # node attr
-            edge_index=edge_index,
-            # edge_attrs=edge_attrs,
-            edge_types=edge_types,
-            edge_timestamps=edge_timestamps,
-            name="DatasetB",
-            num_nodes=num_nodes,
-            num_relations=num_relations,
-        )
-        torch.save(data, f"{self.processed_paths[0]}")
+        for index, (date, group) in enumerate(grouped_df):
+            group = group.reset_index(drop=True)
+
+            source_nodes = group['src_id']
+            target_nodes = group['dst_id']
+            # Inductive -> Transductive
+            # edge_type_series = group['edge_type']
+            # timestamp_series = group['timestamp']
+            # edge_features = group['edge_features']
+
+            # ------------ edge_index ------------
+            edge_index = torch.tensor(
+                np.array([source_nodes, target_nodes]), dtype=torch.long
+            )
+
+            # data = HeteroData()  # TODO: Heterogeneous Graph
+            data = Data(
+                # x=x,  # node attr
+                edge_index=edge_index,
+                # edge_attrs=edge_attrs,
+                # edge_types=edge_types,
+                # edge_timestamps=edge_timestamps,
+                name="DatasetB",
+                num_nodes=num_nodes,
+                num_relations=num_relations,
+            )
+            print("dataset:", data) if index == 0 else None
+            torch.save(data, f"{self.processed_paths[index]}")
 
     def len(self):
-        return len(self.processed_file_names)  # 1: Transductive
+        return len(self.processed_file_names)
 
-    def get(self, index=0):
+    def get(self, index):
+        # data = torch.load(f"{self.root}/processed/train/graph_{index}.pt")
+        # data = torch.load(osp.join(self.processed_dir, f'data_{index}.pt'))
         data = torch.load(self.processed_paths[index])
         return data
 
@@ -265,7 +299,6 @@ class LargeGraphDatasetA(Dataset):
         data = torch.load(self.processed_paths[index])
         return data
 
-"""
 
 if __name__ == '__main__':
 
@@ -288,3 +321,4 @@ if __name__ == '__main__':
 
     print(dataset[0])
     # print(dataset[0].edge_attrs[0])
+"""

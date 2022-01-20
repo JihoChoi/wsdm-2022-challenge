@@ -31,9 +31,6 @@ args = {
     # 'RETRIEVE_INPUT_FLAG': True,
 }
 configs = {
-    'file_name': {
-        'corpus': f"./data/raw/corpus_data/log_corpus.json",
-    },
     'device': torch.device("cuda:1" if torch.cuda.is_available() else "cpu"),
 }
 # args = parse_arguments()

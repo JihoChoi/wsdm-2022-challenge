@@ -1,152 +1,120 @@
 
 """
-2021-12-00
+2022-01-00
 author: Jiho Choi
+Reference
+- https://pytorch-geometric.readthedocs.io/en/latest/modules/loader.html#torch_geometric.loader.GraphSAINTSampler
+- https://github.com/pyg-team/pytorch_geometric/blob/master/examples/hetero/hgt_dblp.py
+- https://github.com/pyg-team/pytorch_geometric/blob/master/examples/rgcn_link_pred.py
+
 """
 
-import sys
+
 import os
+import sys
 import platform
 import datetime
-import argparse
-import yaml  # pip3 install PyYaml
 
-import pyarrow as pa
-import pyarrow.parquet as pq
-
-from google.cloud import bigquery
-from pytz import timezone
-
-# from utils import load_yaml_file
-
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+import torch.nn.init as init
+from torch.optim import Adam
 
-from models import BiGRU
-from dataset import GraphDataset
+from torch.nn import Parameter
+from torch.autograd import Variable
+from torch_geometric.loader import DataLoader
+from torch_geometric.data import Data
+import torch_geometric.transforms as T
+from torch_geometric.datasets import OGB_MAG
+from torch_geometric.nn import GCNConv
+from torch_geometric.nn import SAGEConv, to_hetero
+from torch_geometric.nn import RGCNConv
+from torch_geometric.utils import negative_sampling
+from torch_geometric.utils import batched_negative_sampling
+from torch_geometric.loader import NeighborLoader
 
+from torch.utils.tensorboard import SummaryWriter
+
+
+from dataset import LargeGraphDataset
+from models import TemporalGNN
 from parse_args import params
+from utils import correct_count, load_pickle_file, multi_acc, save_pickle_file
 
-from utils import ensure_directory
-from utils import save_json_file
-from utils import load_pickle_file
-from utils import save_pickle_file
-from utils import set_gcp_credentials
-from utils import multi_acc
-from utils import correct_count
 
+writer = SummaryWriter()
 
 print(params, end='\n\n')
 device = params['device']
 
-
-# https://stellargraph.readthedocs.io/en/stable/demos/link-prediction/ctdne-link-prediction.html
+dataset_name = 'B'
 
 
 if __name__ == '__main__':
     """
-    USAGE:
-        (env) python3 ./scripts/main.py
+    USAGE: (env) python3 ./scripts/main.py
     """
+    start_datetime = datetime.datetime.now()
 
-    # 1) Prepare Dataset & SAVE
-    dataset = GraphDataset(max_len=200)
-    save_pickle_file("./temp/dataset_cache.pickle", dataset)
+    dataset = LargeGraphDataset(dataset_name=dataset_name)
+    dataset = dataset[0]  # PyG Data()
+    # dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
 
-    # 2) LOAD
-    dataset = load_pickle_file("./temp/dataset_cache.pickle")
+    model = TemporalGNN(
+        # num_nodes: 869068, num_relations: 14
+        num_nodes=869068 + 1,  # B) sample_dataset.num_nodes
+        num_relations=14 + 1,  # B) sample_dataset.num_relations
+    )
 
-    # TEST
-    # train_dataset = [dataset[i] for i in range(0, 1000000)]
-    # val_dataset = [dataset[i] for i in range(1000000, 1037414)]
-    # train_dataloader = DataLoader(train_dataset, batch_size=256, shuffle=True)
-    # val_dataloader = DataLoader(val_dataset, batch_size=256, shuffle=True)
-
-    # DEV
-    train_dataset = [dataset[i] for i in range(0, 100)]
-    val_dataset = [dataset[i] for i in range(100, 200)]
-    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=8, shuffle=True)
-
-    # model = BiGRU(input_size, hidden_size, num_layers, num_classes).to(device)
-    model = BiGRU().to(device)
-
-    criterion = nn.CrossEntropyLoss()
-    # criterion, sigmoid = nn.BCELoss(), nn.Sigmoid()
+    # criterion = nn.CrossEntropyLoss()
+    criterion, sigmoid = nn.BCELoss(), nn.Sigmoid()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 
     # --------------------------------
     # Train & Validation
     # --------------------------------
-
-    # TODO: move params
     num_epoch = 5
-
     for epoch in range(num_epoch):
+        loader = NeighborLoader(
+            dataset,
+            # Sample 30 neighbors for each node for 2 iterations
+            num_neighbors=[30] * 2,
+            batch_size=4,
+            # input_nodes=data.train_mask,
+        )
+        for index, data in enumerate(loader):
+            print("data:", data)
+            node_embeddings = model(data)
+            print("node_embeddings:", node_embeddings.shape)
 
-        # model.train()
+            pos_out = model.link_prediction(
+                node_embeddings,
+                data.edge_index,
+                data.edge_types,
+            )
 
-        # ------------ Train ------------
+            # TODO: negative sampling
 
-        for idx, batch in enumerate(train_dataloader):
-            x_feat, x_seq, y_true, y_info = batch
-            x_seq = x_seq.to(device)
-            y_true = y_true.to(device)
+            if index >= 1:
+                break
 
-            # Forward
-            y_pred = model(x_seq)
-            loss = criterion(y_pred, y_true)  # CEL 는 softmax 포함
+            # loss.backward()
+            # optimizer.step()
 
-            # Backward
-            optimizer.zero_grad()
-            loss.backward()
+        print(
+            f"Epoch [{epoch}/{num_epoch}] : " \
+            # f"Loss: {loss.item():.4f}, " \
+            f"\n"
+        )
 
-            # Gradient Descent (adam step)
-            optimizer.step()
+        # TODO: SAVE
+        torch.save({
+            'state_dict': model.state_dict(), 'epoch': epoch
+        }, f'./checkpoints/model_{dataset_name}_{epoch:03d}.pth')
 
-            if idx % 100 == 0:
-                print(
-                    f"Train Batch [{idx}/{len(train_dataloader)}], Acc: {multi_acc(y_pred, y_true)}")
-
-        print(f"Epoch [{epoch}/{num_epoch}], Loss: {loss.item():.4f}")
-
-        # ------------ Validation ------------
-        correct = 0
-
-        for batch in val_dataloader:
-            x_feat, x_seq, y_true, y_info = batch
-            x_seq = x_seq.to(device)
-            y_true = y_true.to(device)
-
-            # Forward
-            y_pred = model(x_seq)
-            loss = criterion(y_pred, y_true)  # CEL 는 softmax 포함
-
-            # Backward
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            correct += correct_count(y_pred, y_true)
-
-            # TODO: Early Stop
-
-            if idx % 10 == 0:
-                print(
-                    f"Validation Batch [{idx}/{len(val_dataloader)}], Acc: {multi_acc(y_pred, y_true)}")
-
-        # accuracy = 100 * correct / len(val_dataloader)
-        result_str = "\n" \
-            + f"Epoch [{epoch}/{num_epoch}]\n" \
-            + f"Loss: {loss.item():.4f}, " \
-            + f"Acc: {correct / len(val_dataset)} ({correct}/{len(val_dataset)}), " \
-            + f"\n"
-
-        print(result_str)
+        break
 
     # --------------------------------
     # Test (Prediction)
@@ -155,9 +123,14 @@ if __name__ == '__main__':
     with torch.no_grad():
         pass
 
-    # TODO: SAVE
 
-    end_datetime = datetime.datetime.now(timezone("Asia/Seoul"))
+        # checkpoint = torch.load(
+        #     f'./checkpoints/model_{dataset_name}_{epoch:03d}.pth'
+        # )
+        # model.load_state_dict(checkpoint['state_dict'])
+
+
+    end_datetime = datetime.datetime.now()
     total_time = round((end_datetime - start_datetime).total_seconds(), 3)
 
     print("\n")

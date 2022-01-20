@@ -152,7 +152,7 @@ def csv2graph(args):
         print(' Input parameters error')
 
     edge_csv = pd.read_csv(
-        f'train_csvs/edges_train_{args.dataset}.csv', header=None)
+        f'./data/wsdm-2022/raw/train/edges_train_{args.dataset}.csv', header=None)
 
     heterogenous_group = edge_csv.groupby(2)
     graph_dict = {}
@@ -171,7 +171,7 @@ def csv2graph(args):
     if args.dataset == 'A':
         # Assign Node feature in to graph
         node_feat_csv = pd.read_csv(
-            'train_csvs/node_features.csv', header=None)
+            './data/wsdm-2022/raw/train/node_features.csv', header=None)
         node_feat = node_feat_csv.values[:, 1:]
         node_idx = node_feat_csv.values[:, 0]
         g.nodes[src_type].data['feat'] = torch.zeros(
@@ -180,14 +180,14 @@ def csv2graph(args):
 
         # Assign Edge Type Feature as the graph`s label, which can be saved along with dgl.heterograph
         etype_feat_csv = pd.read_csv(
-            'train_csvs/edge_type_features.csv', header=None)
+            './data/wsdm-2022/raw/train/edge_type_features.csv', header=None)
         etype_feat_tensor = torch.FloatTensor(etype_feat_csv.values[:, 1:])
         etype_feat = {}
         for i, etype in enumerate(g.etypes):
             etype_feat[etype] = etype_feat_tensor[i]
 
         dgl.save_graphs(
-            f"./DGLgraphs/Dataset_{args.dataset}.bin", g, etype_feat)
+            f"./data/wsdm-2022/DGLgraphs/Dataset_{args.dataset}.bin", g, etype_feat)
 
     if args.dataset == 'B':
         etype_feat = None
@@ -198,4 +198,4 @@ def csv2graph(args):
             if len(str(records[4].iloc[0])) > 3:
                 g.edges[etype].data['feat'] = (
                     extract_edge_feature(records[4]))
-        dgl.save_graphs(f"./DGLgraphs/Dataset_{args.dataset}.bin", g)
+        dgl.save_graphs(f"./data/wsdm-2022/DGLgraphs/Dataset_{args.dataset}.bin", g)

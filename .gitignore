@@ -4,8 +4,12 @@ temp/
 tmp/
 results/
 out/
+checkpoints/
+baselines/
+runs/
 
 .vscode/
+temp.txt
 
 
 
