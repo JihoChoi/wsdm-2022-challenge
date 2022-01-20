@@ -286,20 +286,21 @@ if __name__ == '__main__':
             exist_prob = pred_prob_end - pred_prob_start
 
             exist_prob = F.sigmoid(exist_prob)  # TODO:
-            exist_prob = (exist_prob>0.5).float()
-            print("exist_prob.shape:", exist_prob.shape)
+            pred_label = (exist_prob>0.5).float()
+            # pred_label = (exist_prob>0.0).float()
+            print("pred_label.shape:", pred_label.shape)
             print("torch.tensor(label).shape:", torch.tensor(label).shape)
 
-            print(exist_prob[0:10])
+            print(pred_label[0:10])
             print(torch.tensor(label)[0:10])
-            print((exist_prob == torch.tensor(label))[0:10])
-            correct = (exist_prob == torch.tensor(label)).sum()
+            print((pred_label == torch.tensor(label))[0:10])
+            correct = (pred_label == torch.tensor(label)).sum()
 
-            # correct = (exist_prob == label).float().sum()
-            correct = np.array((exist_prob == torch.tensor(label))).sum()
+            # correct = (pred_label == label).float().sum()
+            # correct = np.array((pred_label == torch.tensor(label))).sum()
 
 
-            print("val:", exist_prob)
+            print("val:", pred_label)
             print("np.unique(label, return_counts=True):", np.unique(label, return_counts=True))
             AUC = roc_auc_score(label, exist_prob)
             print(f'\nAUC is {round(AUC, 5)} '
@@ -359,7 +360,7 @@ if __name__ == '__main__':
             pred_prob_end = F.sigmoid(pred_prob_end)
             pred_prob_start = F.sigmoid(pred_prob_start)
             exist_prob = pred_prob_end - pred_prob_start
-            # exist_prob = F.sigmoid(exist_prob)
+            # exist_prob = F.sigmoid(exist_prob)  # TODO:
 
             print("test:", exist_prob)
             save_prob(exist_prob, epoch)
