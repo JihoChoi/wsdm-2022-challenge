@@ -50,12 +50,19 @@ if __name__ == "__main__":
     data_dir = 'data/wsdm-2022/raw'
     host_url = 'https://data.dgl.ai/dataset/WSDMCup2022'
 
+    os.system(f'wget -P {data_dir}/test https://data.dgl.ai/dataset/WSDMCup2022/final/input_A.csv.gz')
+    os.system(f'wget -P {data_dir}/test https://data.dgl.ai/dataset/WSDMCup2022/final/input_B.csv.gz')
+    os.system(f'gzip -d {data_dir}/test/*.gz')
+    os.system(f'gzip -d {data_dir}/test/*.gz')
+    exit()
+
     if not os.path.exists(f'{data_dir}/train'):
         os.system(f'wget -P {data_dir}/train {host_url}/edges_train_A.csv.gz')
         os.system(f'wget -P {data_dir}/train {host_url}/node_features.csv.gz')
         os.system(f'wget -P {data_dir}/train {host_url}/edge_type_features.csv.gz')
         os.system(f'wget -P {data_dir}/train {host_url}/edges_train_B.csv.gz')
         os.system(f'gzip -d {data_dir}/train/*.gz')
+
 
     if not os.path.exists('f{data_dir}/test'):
         os.system(f'wget -P {data_dir}/test {host_url}/input_A_initial.csv.gz')

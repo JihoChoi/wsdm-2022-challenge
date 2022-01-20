@@ -31,6 +31,9 @@ from torch_geometric.datasets import OGB_MAG
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn import SAGEConv, to_hetero
 from torch_geometric.nn import RGCNConv
+# from torch_geometric.nn import BatchNorm, BatchNorm1d
+from torch.nn import BatchNorm1d
+
 from torch_geometric.utils import negative_sampling
 from torch_geometric.utils import batched_negative_sampling
 
@@ -49,49 +52,109 @@ class TemporalGNN(torch.nn.Module):
         # -----------------
         #     Dataset B
         # -----------------
-        num_classes = 2
+        # num_classes = 2
         # self.node_emb = Parameter(torch.Tensor(num_nodes, hidden_channels))
 
         # self.entity_embedding = nn.Embedding(num_entities, 100)
         # self.relation_embedding = nn.Parameter(torch.Tensor(num_relations, 100))
 
+        self.node_embedding = nn.Embedding(num_nodes, 24)  # Lookup
+        self.bn24 = BatchNorm1d(24)
         self.conv1 = RGCNConv(
-            num_nodes, 64, num_relations, num_bases=30
+            24, 32, num_relations, # num_bases=30
         )
+        self.bn32 = BatchNorm1d(32)
         self.conv2 = RGCNConv(
-            64, 32, num_relations, num_bases=30
+            32, 32, num_relations, # num_bases=30
         )
-        self.rel_emb = Parameter(torch.Tensor(num_relations, 32))
-        print("self.rel_emb:", self.rel_emb.shape)
+        self.emb_rel = Parameter(torch.Tensor(num_relations, 32))
+        # self.emb_rel = nn.Linear(num_relations, 32)
+        # self.bn1 = nn.BatchNorm1d(1)  # continuous time
+        # self.timestamp_emb = Parameter(torch.Tensor())
+        # self. emb_ts = nn.Embedding(1, 100)
+        self.emb_ts = nn.Linear(1, 2)
+        self.bn2 = BatchNorm1d(2)
+
+
+        self.emb_triplets = nn.Linear(32 * 3, 32)  # src, link, tgt -> tri
+        self.emb_link = nn.Linear(32 + 2, 1)  # tri + ts -> prob
+
+        nn.init.xavier_uniform_(self.conv1.weight)
+        nn.init.xavier_uniform_(self.conv2.weight)
+        # nn.init.xavier_uniform_(self.emb_rel.weight)
+        nn.init.xavier_uniform_(self.emb_ts.weight)
+        nn.init.xavier_uniform_(self.emb_triplets.weight)
+        nn.init.xavier_uniform_(self.emb_link.weight)
+
+
+        # print("self.emb_rel:", self.emb_rel.shape)
 
     def forward(self, data):
-        x = data.x
+
+        x = np.unique(data.edge_index)
+
+        # print("data.node_idx:",data.node_idx)
+        # print("data.x:", x)
+        # print("data.x:", x.shape)
+        x = self.node_embedding(data.n_id)
+        x = self.bn24(x)
+
         edge_index = data.edge_index
         # edge_attrs = data.edge_attrs
         edge_types = data.edge_types
-        edge_timestamps = data.edge_timestamps
+        # edge_timestamps = data.edge_timestamps
 
         edge_types = edge_types[0:edge_index.size(1)]
 
-        x = F.relu(self.conv1(None, edge_index, edge_types))
+
+        x = F.relu(self.conv1(x, edge_index, edge_types))  # [2, 41] -> [869069, 24]
+        x = self.bn32(x)
         x = F.dropout(x, p=0.2, training=self.training)
-        x = self.conv2(x, edge_index, edge_types)
+        x = self.conv2(x, edge_index, edge_types)  # [869069, 24] -> [869069, 32]
+        x = self.bn32(x)
 
         # x = F.log_softmax(x, dim=1)
         return x
 
+    def link_embedding(self, node_embeddings, edge_index, edge_type):
 
-
-    def emb_concat(self, g, etype):
-        pass
-        # source, target, edge_type, timestamp
-
-
-    def link_prediction(self, node_embeddings, edge_index, edge_type):
         z = node_embeddings
         z_src, z_dst = z[edge_index[0]], z[edge_index[1]]
-        rel = self.rel_emb[edge_type]
-        return torch.sum(z_src * rel * z_dst, dim=1)  # Element-wise Product
+        rel = self.emb_rel[edge_type]
+
+        # print("z_src   :", z_src.shape)
+        # print("z_dst   :", z_dst.shape)
+        # print("rel     :", rel.shape)
+        # print("torch.sum(z_src * rel * z_dst, dim=1):", torch.sum(z_src * rel * z_dst, dim=1).shape)
+        # print(torch.sum(z_src * rel * z_dst, dim=1)[0:4])
+
+        z_tri = self.emb_triplets(torch.cat((z_src, rel, z_dst), 1))
+
+        return z_tri
+        # source, target, edge_type, timestamp
+
+    def temporal_link_prediction(self, z_tri, edge_timestamps):
+
+        # print("edge_timestamps   :", edge_timestamps.shape)
+        # edge_timestamps = self.bn1(edge_timestamps)
+        edge_timestamps = edge_timestamps.float().unsqueeze(1)  # [41] -> [41, 1]
+        edge_timestamps = self.emb_ts(edge_timestamps)
+        # edge_timestamps = self.bn2(edge_timestamps)
+        edge_timestamps = F.relu(edge_timestamps)  # TODO:
+        # print("edge_ts :", edge_timestamps.shape)
+        # edge_timestamps = edge_timestamps.unsqueeze(1)
+
+        # print("z_tri:", z_tri.shape)
+        link_likelihood = self.emb_link(torch.cat((z_tri, edge_timestamps), 1))
+        # link_likelihood = F.relu(link_likelihood)  # TODO:
+        # print("z_tri:", link_likelihood.shape)
+
+
+        # torch.sum(z_src * rel * z_dst, dim=1)
+        # torch.sum(z_src * rel * z_dst, dim=1)  # element-wise product
+
+        link_likelihood = link_likelihood
+        return link_likelihood
 
 
     def calc_loss(self, node_embeddings, samples, target):
@@ -100,7 +163,7 @@ class TemporalGNN(torch.nn.Module):
 
 
 
-# model = GNN(hidden_channels=64, out_channels=dataset.num_classes)
+# model = GNN(hidden_channels=24, out_channels=dataset.num_classes)
 # model = to_hetero(model, data.metadata(), aggr='sum')
 
 if __name__ == '__main__':
@@ -124,56 +187,3 @@ if __name__ == '__main__':
 
     y_pred = model(data)
 
-    exit()
-    for data in dataloader:
-        print("-------------------------------")
-        print("data:", data)
-        print("-------------------------------\n")
-        y_pred = model(data)
-        # y_pred = model(data)
-        # loss = criterion(y_pred, y_true)
-        # print(data)
-        # print("data.edge_index:", data.edge_index.shape)
-        # print("data.edge_attrs:", data.edge_attrs.shape)
-        break
-
-        loss.backward()
-        optimizer.step()
-        pass
-
-    exit()
-
-    # 3) MODEL
-    device = params['device']
-    model = TemporalGNN(
-
-    ).to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
-
-    data = next(iter(dataloader))
-    out = model(data)
-
-    # Overfit on a Single Batch
-    for epoch in range(100):
-        y_pred = model(data)
-        loss = criterion(y_pred, y_true)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        print(loss)
-
-    model.eval()
-    y_pred = model(x_seq)
-
-    print("-------------------------------------------")
-    print(f"accuracy : {multi_acc(y_pred, y_true)}")
-    print(f"correct  : {correct_count(y_pred, y_true)} / {32}")
-    print("-------------------------------------------")
-    print(y_true.tolist())
-    print(torch.max(y_pred, dim=1).indices.tolist())
-    print("-------------------------------------------")
-    print(torch.max(y_pred, dim=1))
-    print(y_info)
-    # print(y_pred)
-    # print(F.softmax(y_pred, dim=1))

@@ -88,6 +88,8 @@ pip install jupyterlab
 pip install networkx
 pip install pyvis
 
+# pip install dgl-cu111 -f https://data.dgl.ai/wheels/repo.html
+
 ```
 
 ### Usage

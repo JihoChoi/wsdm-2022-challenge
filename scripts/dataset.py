@@ -35,7 +35,6 @@ class LargeGraphDataset():
 # B
 # -----------------------------------------------------------------------------
 
-
 class LargeGraphDataB(Dataset):
     # Transductive Setting
     def __init__(self, root="./data/wsdm-2022"):
@@ -49,22 +48,13 @@ class LargeGraphDataB(Dataset):
     def processed_file_names(self):
         # $ head -n 200 ./data/wsdm-2022/raw/train/edges_train_B.csv
         return [f'dataset_b/large_graph.pt']
+        # return [
+        #     f'dataset_b/large_graph_train.pt',
+        #     f'dataset_b/large_graph_validation.pt',
+        #     f'dataset_b/large_graph_test.pt',
+        # ]
 
     def process(self):
-        def extract_edge_feature(records):
-            feat_list = []
-            # edge_feature_exist: 552215, edge_feature_not_exist: 7726216
-            for record in records:
-                if record != 'nan':
-                    feat_list.append(record.strip().split(','))
-                    # print(len(record.strip().split(',')), end=' ')  # 768
-                    # print(record.strip().split(',')[0:5])
-                else:
-                    # TODO: rand (?)
-                    # feat_list.append("NaN")
-                    pass
-            return torch.FloatTensor(np.array(feat_list).astype('float32'))
-
         print("------------------")
         print("    process (B)   ")
         print("------------------")
@@ -80,34 +70,19 @@ class LargeGraphDataB(Dataset):
             },
             # nrows=2200,  # DEV MODE
         ).sort_values('timestamp')
-        edge_list_df['edge_features'] = edge_list_df['edge_features'].astype(str)
-
-        # edge_list_df['date'] = edge_list_df['timestamp'].apply(
-        #     lambda x: datetime.datetime.fromtimestamp(x).strftime("%Y%m%d")
-        # )
-        # grouped_df = edge_list_df.groupby('date')
+        # edge_list_df['edge_features'] = edge_list_df['edge_features'].astype(str)
 
         # Graph Properties
-        num_nodes = int(
-            max(edge_list_df['src_id'].max(), edge_list_df['dst_id'].max())
-        ) + 1
+        num_nodes = int(max(edge_list_df['src_id'].max(), edge_list_df['dst_id'].max())) + 1
         num_relations = int(edge_list_df['edge_type'].max()) + 1
-
         print("num_nodes     :", num_nodes)
         print("num_relations :", num_relations)
 
-        edge_type_series = edge_list_df['edge_type']
-        timestamp_series = edge_list_df['timestamp']
-        edge_types = torch.tensor(edge_type_series, dtype=torch.long)
-        edge_timestamps = torch.tensor(timestamp_series, dtype=torch.long)
-
-        source_nodes = edge_list_df['src_id']
-        target_nodes = edge_list_df['dst_id']
-
+        edge_types = torch.tensor(edge_list_df['edge_type'], dtype=torch.long)
+        edge_timestamps = torch.tensor(edge_list_df['timestamp'], dtype=torch.long)
         edge_index = torch.tensor(
-            np.array([source_nodes, target_nodes]), dtype=torch.long
+            np.array([edge_list_df['src_id'], edge_list_df['dst_id']]), dtype=torch.long
         )
-
         # data = HeteroData()  # TODO: Heterogeneous Graph
         data = Data(
             # x=x,  # node attr
@@ -120,6 +95,31 @@ class LargeGraphDataB(Dataset):
             num_relations=num_relations,
         )
         torch.save(data, f"{self.processed_paths[0]}")
+
+        """
+        # ---------------- input_B_initial.csv (validation) ----------------
+        test_csv = pd.read_csv(
+            f"data/wsdm-2022/raw/test/input_B_initial.csv"
+            names=['src', 'dst', 'type', 'start_at', 'end_at', 'exist']
+        )
+        start_at = torch.tensor(test_csv.start_at.values)
+        end_at = torch.tensor(test_csv.end_at.values)
+        edge_types = torch.tensor(edge_list_df['edge_type'], dtype=torch.long)
+        edge_timestamps = torch.tensor(edge_list_df['timestamp'], dtype=torch.long)
+
+        data = Data(
+            # x=x,  # node attr
+            edge_index=edge_index,
+            # edge_attrs=edge_attrs,
+            edge_types=edge_types,
+            edge_timestamps=edge_timestamps,
+            name="DatasetB",
+            num_nodes=num_nodes,
+            num_relations=num_relations,
+        )
+        torch.save(data, f"{self.processed_paths[1]}")
+        # torch.save(data, f"{self.processed_paths[2]}")
+        """
 
     def len(self):
         return len(self.processed_file_names)  # 1: Transductive
@@ -288,3 +288,22 @@ if __name__ == '__main__':
 
     print(dataset[0])
     # print(dataset[0].edge_attrs[0])
+
+
+
+
+"""
+        def extract_edge_feature(records):
+            feat_list = []
+            # edge_feature_exist: 552215, edge_feature_not_exist: 7726216
+            for record in records:
+                if record != 'nan':
+                    feat_list.append(record.strip().split(','))
+                    # print(len(record.strip().split(',')), end=' ')  # 768
+                    # print(record.strip().split(',')[0:5])
+                else:
+                    # TODO: rand (?)
+                    # feat_list.append("NaN")
+                    pass
+            return torch.FloatTensor(np.array(feat_list).astype('float32'))
+"""
