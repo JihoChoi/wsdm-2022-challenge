@@ -74,10 +74,12 @@ class TemporalGNN(torch.nn.Module):
         # self. emb_ts = nn.Embedding(1, 100)
         self.emb_ts = nn.Linear(1, 2)
         self.bn2 = BatchNorm1d(2)
+        self.bn1 = BatchNorm1d(1)
 
 
         self.emb_triplets = nn.Linear(32 * 3, 32)  # src, link, tgt -> tri
-        self.emb_link = nn.Linear(32 + 2, 16)  # tri + ts -> prob
+        # self.emb_link = nn.Linear(32 + 2, 16)  # tri + ts -> prob
+        self.emb_link = nn.Linear(32 + 1, 16)  # tri + ts -> prob
         self.emb_link2 = nn.Linear(16, 1)  # tri + ts -> prob
 
         nn.init.xavier_uniform_(self.conv1.weight)
@@ -111,7 +113,7 @@ class TemporalGNN(torch.nn.Module):
 
         x = F.relu(self.conv1(x, edge_index, edge_types))  # [2, 41] -> [869069, 24]
         x = self.bn32(x)
-        x = F.dropout(x, p=0.2, training=self.training)
+        x = F.dropout(x, p=0.5, training=self.training)
         x = self.conv2(x, edge_index, edge_types)  # [869069, 24] -> [869069, 32]
         x = self.bn32(x)
 
@@ -140,15 +142,20 @@ class TemporalGNN(torch.nn.Module):
         # print("edge_timestamps   :", edge_timestamps.shape)
         # edge_timestamps = self.bn1(edge_timestamps)
         edge_timestamps = edge_timestamps.float().unsqueeze(1)  # [41] -> [41, 1]
+        edge_timestamps = self.bn1(edge_timestamps)
+
+        """
         edge_timestamps = self.emb_ts(edge_timestamps)
-        # edge_timestamps = self.bn2(edge_timestamps)
+        edge_timestamps = self.bn2(edge_timestamps)
         edge_timestamps = F.relu(edge_timestamps)  # TODO:
         # print("edge_ts :", edge_timestamps.shape)
         # edge_timestamps = edge_timestamps.unsqueeze(1)
+        """
 
         # print("z_tri:", z_tri.shape)
         link_prob = self.emb_link(torch.cat((z_tri, edge_timestamps), 1))
         link_prob = F.relu(link_prob)
+        link_prob = F.dropout(link_prob, p=0.5, training=self.training)
         link_prob = self.emb_link2(link_prob)
 
         # link_likelihood = F.relu(link_likelihood)  # TODO:

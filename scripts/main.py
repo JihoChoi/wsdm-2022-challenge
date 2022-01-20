@@ -46,6 +46,7 @@ from dataset import LargeGraphDataset
 from models import TemporalGNN
 from parse_args import params
 from utils import correct_count, load_pickle_file, multi_acc, save_pickle_file
+from utils import ensure_directory
 
 
 writer = SummaryWriter()
@@ -59,8 +60,10 @@ device = 'cpu'
 dataset_name = 'B'
 
 
+
 def save_prob(exist_prob, epoch=None):
-    with open(f"data/wsdm-2022/output_B_{epoch:03d}.csv", "a") as file_object:
+    ensure_directory(f"results/wsdm-2022/B/")
+    with open(f"results/wsdm-2022/B/output_B_{epoch:03d}.csv", "a") as file_object:
         for prob in exist_prob.tolist():
             file_object.write(str(prob) + ',\n')
 
@@ -119,7 +122,8 @@ if __name__ == '__main__':
             # num_neighbors=[-1] * 1,
             shuffle=True,
             input_nodes=None,
-            batch_size=1024*16
+            # batch_size=1024*16
+            batch_size=1024*32
         )
         # batch = next(iter(train_loader))
         # print(dir(batch))
@@ -207,7 +211,7 @@ if __name__ == '__main__':
                 f"Batch[{index}/{len(train_loader)}] loss: {loss.item():.5f} "
                 f"Acc: {int(correct.item())}/{len(prob)} = {correct.item() / len(prob)}"
             )
-            # break
+            # break  # TODO:
             writer.add_scalar(
                 'loss (training)',
                 loss.item(),
@@ -247,8 +251,8 @@ if __name__ == '__main__':
             )
             # Load test_csv
             label = test_csv.exist.values
-            start_at = torch.tensor(test_csv.start_at.values)
-            end_at = torch.tensor(test_csv.end_at.values)
+            # start_at = torch.tensor(test_csv.start_at.values)
+            # end_at = torch.tensor(test_csv.end_at.values)
             edge_types = torch.tensor(test_csv.type.values)
             start_ts = torch.tensor(test_csv.start_at.values)
             end_ts = torch.tensor(test_csv.end_at.values)
@@ -277,13 +281,30 @@ if __name__ == '__main__':
             )
             pred_prob_end = model.temporal_link_prediction(z_tri, end_ts).squeeze()
             pred_prob_start = model.temporal_link_prediction(z_tri, start_ts).squeeze()
-            # pred_prob_end = F.sigmoid(pred_prob_end)
-            # pred_prob_start = F.sigmoid(pred_prob_start)
+            pred_prob_end = F.sigmoid(pred_prob_end)
+            pred_prob_start = F.sigmoid(pred_prob_start)
             exist_prob = pred_prob_end - pred_prob_start
-            exist_prob = F.sigmoid(exist_prob)
 
+            exist_prob = F.sigmoid(exist_prob)  # TODO:
+            exist_prob = (exist_prob>0.5).float()
+            print("exist_prob.shape:", exist_prob.shape)
+            print("torch.tensor(label).shape:", torch.tensor(label).shape)
+
+            print(exist_prob[0:10])
+            print(torch.tensor(label)[0:10])
+            print((exist_prob == torch.tensor(label))[0:10])
+            correct = (exist_prob == torch.tensor(label)).sum()
+
+            # correct = (exist_prob == label).float().sum()
+            correct = np.array((exist_prob == torch.tensor(label))).sum()
+
+
+            print("val:", exist_prob)
+            print("np.unique(label, return_counts=True):", np.unique(label, return_counts=True))
             AUC = roc_auc_score(label, exist_prob)
-            print(f'AUC is {round(AUC, 5)}')
+            print(f'\nAUC is {round(AUC, 5)}'
+                f"Acc: {int(correct.item())}/{len(exist_prob)} = {correct.item() / len(prob)}"
+            )
 
             # TODO: Write results for test set
 
@@ -305,8 +326,8 @@ if __name__ == '__main__':
                 names=['src', 'dst', 'type', 'start_at', 'end_at']
             )
             # Load test_csv
-            start_at = torch.tensor(test_csv.start_at.values)
-            end_at = torch.tensor(test_csv.end_at.values)
+            # start_at = torch.tensor(test_csv.start_at.values)
+            # end_at = torch.tensor(test_csv.end_at.values)
             edge_types = torch.tensor(test_csv.type.values)
             start_ts = torch.tensor(test_csv.start_at.values)
             end_ts = torch.tensor(test_csv.end_at.values)
@@ -335,12 +356,12 @@ if __name__ == '__main__':
             )
             pred_prob_end = model.temporal_link_prediction(z_tri, end_ts).squeeze()
             pred_prob_start = model.temporal_link_prediction(z_tri, start_ts).squeeze()
-            # pred_prob_end = F.sigmoid(pred_prob_end)
-            # pred_prob_start = F.sigmoid(pred_prob_start)
-
+            pred_prob_end = F.sigmoid(pred_prob_end)
+            pred_prob_start = F.sigmoid(pred_prob_start)
             exist_prob = pred_prob_end - pred_prob_start
-            exist_prob = F.sigmoid(exist_prob)
+            # exist_prob = F.sigmoid(exist_prob)
 
+            print("test:", exist_prob)
             save_prob(exist_prob, epoch)
 
             # TODO: Write results for test set
