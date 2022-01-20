@@ -77,7 +77,8 @@ class TemporalGNN(torch.nn.Module):
 
 
         self.emb_triplets = nn.Linear(32 * 3, 32)  # src, link, tgt -> tri
-        self.emb_link = nn.Linear(32 + 2, 1)  # tri + ts -> prob
+        self.emb_link = nn.Linear(32 + 2, 16)  # tri + ts -> prob
+        self.emb_link2 = nn.Linear(16, 1)  # tri + ts -> prob
 
         nn.init.xavier_uniform_(self.conv1.weight)
         nn.init.xavier_uniform_(self.conv2.weight)
@@ -85,6 +86,7 @@ class TemporalGNN(torch.nn.Module):
         nn.init.xavier_uniform_(self.emb_ts.weight)
         nn.init.xavier_uniform_(self.emb_triplets.weight)
         nn.init.xavier_uniform_(self.emb_link.weight)
+        nn.init.xavier_uniform_(self.emb_link2.weight)
 
 
         # print("self.emb_rel:", self.emb_rel.shape)
@@ -145,7 +147,10 @@ class TemporalGNN(torch.nn.Module):
         # edge_timestamps = edge_timestamps.unsqueeze(1)
 
         # print("z_tri:", z_tri.shape)
-        link_likelihood = self.emb_link(torch.cat((z_tri, edge_timestamps), 1))
+        link_prob = self.emb_link(torch.cat((z_tri, edge_timestamps), 1))
+        link_prob = F.relu(link_prob)
+        link_prob = self.emb_link2(link_prob)
+
         # link_likelihood = F.relu(link_likelihood)  # TODO:
         # print("z_tri:", link_likelihood.shape)
 
@@ -153,8 +158,7 @@ class TemporalGNN(torch.nn.Module):
         # torch.sum(z_src * rel * z_dst, dim=1)
         # torch.sum(z_src * rel * z_dst, dim=1)  # element-wise product
 
-        link_likelihood = link_likelihood
-        return link_likelihood
+        return link_prob
 
 
     def calc_loss(self, node_embeddings, samples, target):
