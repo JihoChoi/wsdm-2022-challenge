@@ -61,9 +61,10 @@ dataset_name = 'B'
 
 
 
-def save_prob(exist_prob, epoch=None):
-    ensure_directory(f"results/wsdm-2022/B/")
-    with open(f"results/wsdm-2022/B/output_B_{epoch:03d}.csv", "a") as file_object:
+def save_prob(exist_prob, start_time, epoch=None):
+    results_dir = f'results/wsdm-2022/B/{start_time}/'
+    ensure_directory(results_dir)
+    with open(f"{results_dir}output_B_{epoch:03d}.csv", "a") as file_object:
         for prob in exist_prob.tolist():
             file_object.write(str(prob) + ',\n')
 
@@ -363,7 +364,7 @@ if __name__ == '__main__':
             # exist_prob = F.sigmoid(exist_prob)  # TODO:
 
             print("test:", exist_prob)
-            save_prob(exist_prob, epoch)
+            save_prob(exist_prob, start_datetime.strftime('%Y%m%d_%H%M%S'), epoch)
 
             # TODO: Write results for test set
 
