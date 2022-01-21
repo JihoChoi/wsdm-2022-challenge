@@ -65,14 +65,6 @@ def save_prob(exist_prob, start_time, epoch=None):
     ensure_directory(results_dir)
     with open(f"{results_dir}output_B_{epoch:03d}.csv", "a") as file_object:
         for prob in exist_prob.tolist():
-            file_object.write(str(prob) + ',\n')
-            # if prob >= 0.5:
-            #     file_object.write(str(1) + ',\n')
-            # else:
-            #     file_object.write(str(0) + ',\n')
-
-    with open(f"{results_dir}output_B_{epoch:03d}_01.csv", "a") as file_object:
-        for prob in exist_prob.tolist():
             # file_object.write(str(prob) + ',\n')
             if prob >= 0.5:
                 file_object.write(str(1) + ',\n')
@@ -102,8 +94,8 @@ if __name__ == '__main__':
     # criterion = nn.CrossEntropyLoss()
     # criterion, sigmoid = nn.BCELoss(), nn.Sigmoid()
     # loss_bce = nn.BCEWithLogitsLoss()  # include sigmoid
-    loss_bce = nn.BCELoss()  # no sigmoid
-    loss_bce2 = nn.BCELoss()  # no sigmoid
+    # loss_bce = nn.BCELoss()  # no sigmoid
+    loss_ce = nn.CrossEntropyLoss(reduce=None, reduction='mean')
 
     optimizer = torch.optim.Adam(
         model.parameters(), lr=0.001,
@@ -205,9 +197,9 @@ if __name__ == '__main__':
                 z_tri,
                 ts_before,
             )
-            # 3) Pos 3 (Neg)
+            # 3) Neg 3
             ts_after = data.edge_timestamps + 24 * 3600 * 4 # (+4 day)
-            neg_label3 = torch.ones_like(ts_after)
+            neg_label3 = torch.zeros_like(ts_after)
             neg_exist_prob3 = model.temporal_link_prediction(
                 z_tri,
                 ts_after,
@@ -236,17 +228,17 @@ if __name__ == '__main__':
             # neg_exist_prob = neg_exist_prob.squeeze()
             # print(pos_exist_prob)
             # print(neg_exist_prob)
-            # prob = torch.cat([pos_exist_prob, neg_exist_prob, neg_exist_prob2, neg_exist_prob3], 0).squeeze()
-            prob = torch.cat([pos_exist_prob, neg_exist_prob, neg_exist_prob2], 0).squeeze()
-            prob = torch.sigmoid(prob)  # TODO: HERE
+            prob = torch.cat([pos_exist_prob, neg_exist_prob, neg_exist_prob2, neg_exist_prob3], 0).squeeze()
 
             # print("prob:", prob.shape, prob)
-            # label = torch.cat([pos_label, neg_label1, neg_label2, neg_label3], 0).float()
-            label = torch.cat([pos_label, neg_label1, neg_label2], 0).float()
+            label = torch.cat([pos_label, neg_label1, neg_label2, neg_label3], 0)
 
             # print("prob:", prob)
             # print("prob:", prob)
             # print("label:", label)
+            one_hot_label = nn.functional.one_hot(label).float()
+            # print("one_hot:", one_hot)
+
 
             # print("prob", prob.shape, prob)
             # print("label", label.shape, label)
@@ -255,33 +247,19 @@ if __name__ == '__main__':
             # print(np.unique(data.edge_types))
             # print(len(np.unique(data.edge_types)))
             # loss = loss_bce(prob, label) / len(np.unique(data.edge_types))
-            loss = loss_bce(prob, label)
-
-            exist_prob = neg_exist_prob3 - neg_exist_prob2  # -1 ~ 1
-
-            # print("neg_exist_prob3", neg_exist_prob3.shape)
-            # print("neg_exist_prob2", neg_exist_prob2.shape)
-            exist_prob = torch.sigmoid(exist_prob)  # TODO: HERE
-            pos_label = torch.ones_like(neg_exist_prob2)
+            # loss = loss_bce(prob, label)
+            loss = loss_ce(prob, one_hot_label)
 
 
-            # print("exist_prob", exist_prob.shape)
-            # print("pos_label", pos_label.shape)
-
-
-            # loss2 = loss_bce2(exist_prob.squeeze(), pos_label.squeeze())
-            # loss = loss + loss2
-
-
-
-            # pred_label = torch.sigmoid(prob)
-            pred_label = (prob > 0.5).float()
-            correct = (pred_label == label).float().sum()
-
-
-            # loss = loss_bce(torch.sigmoid(exist_prob), torch.tensor(label).float())
             loss.backward()
             optimizer.step()
+
+            # pred_label = torch.sigmoid(prob)
+            # pred_label = (prob > 0.5).float()
+            pred_label = torch.argmax(prob, dim=1)
+            # print("pred_label :", pred_label)
+            # print("label      :", label)
+            correct = (pred_label == label).float().sum()
 
             # exit()
             print(
@@ -317,91 +295,86 @@ if __name__ == '__main__':
         # validate
         # --------------------------------
         # model.eval()
-        # model.eval()
-        # with torch.no_grad():
+        model.eval()
+        with torch.no_grad():
+            test_csv = pd.read_csv(
+                f"data/wsdm-2022/raw/test/input_B_initial.csv",
+                names=['src', 'dst', 'type', 'start_at', 'end_at', 'exist']
+            )
+            # Load test_csv
+            label = test_csv.exist.values
+            # start_at = torch.tensor(test_csv.start_at.values)
+            # end_at = torch.tensor(test_csv.end_at.values)
+            edge_types = torch.tensor(test_csv.type.values)
+            start_ts = torch.tensor(test_csv.start_at.values)
+            end_ts = torch.tensor(test_csv.end_at.values)
+            edge_index = torch.tensor(
+                np.array([test_csv.src.values, test_csv.dst.values]), dtype=torch.long
+            )
+            # dataset.n_id = torch.arange(dataset.num_nodes)
+            # print("node_embeddings:", node_embeddings.shape)
+            data = Data(
+                # x=x,  # node attr
+                edge_index=edge_index,
+                # edge_attrs=edge_attrs,
+                edge_types=edge_types,
+                # edge_timestamps=edge_timestamps,
+                # name="DatasetB",
+                num_nodes=num_nodes,
+                # num_relations=num_relations,
+            )
+            data.n_id = torch.arange(num_nodes)
 
-        test_csv = pd.read_csv(
-            f"data/wsdm-2022/raw/test/input_B_initial.csv",
-            names=['src', 'dst', 'type', 'start_at', 'end_at', 'exist']
-        )
-        # Load test_csv
-        label = test_csv.exist.values
-        # start_at = torch.tensor(test_csv.start_at.values)
-        # end_at = torch.tensor(test_csv.end_at.values)
-        edge_types = torch.tensor(test_csv.type.values)
-        start_ts = torch.tensor(test_csv.start_at.values)
-        end_ts = torch.tensor(test_csv.end_at.values)
-        edge_index = torch.tensor(
-            np.array([test_csv.src.values, test_csv.dst.values]), dtype=torch.long
-        )
-        # dataset.n_id = torch.arange(dataset.num_nodes)
-        # print("node_embeddings:", node_embeddings.shape)
-        data = Data(
-            # x=x,  # node attr
-            edge_index=edge_index,
-            # edge_attrs=edge_attrs,
-            edge_types=edge_types,
-            # edge_timestamps=edge_timestamps,
-            # name="DatasetB",
-            num_nodes=num_nodes,
-            # num_relations=num_relations,
-        )
-        data.n_id = torch.arange(num_nodes)
+            node_embeddings = model(data)
+            z_tri = model.link_embedding(
+                node_embeddings,  # load
+                edge_index,
+                edge_types,
+            )
+            pred_prob_end = model.temporal_link_prediction(
+                z_tri, end_ts).squeeze()
+            pred_prob_start = model.temporal_link_prediction(
+                z_tri, start_ts).squeeze()
+            # print("pred_prob_end:", pred_prob_end[0:10])
+            # print("pred_prob_start:", pred_prob_start[0:10])
+            # pred_prob_end = torch.sigmoid(pred_prob_end)  # TODO: HERE
+            # pred_prob_start = torch.sigmoid(pred_prob_start)  # TODO: HERE
+            exist_prob = pred_prob_end - pred_prob_start
 
-        node_embeddings = model(data)
-        z_tri = model.link_embedding(
-            node_embeddings,  # load
-            edge_index,
-            edge_types,
-        )
-        pred_prob_end = model.temporal_link_prediction(
-            z_tri, end_ts).squeeze()
-        pred_prob_start = model.temporal_link_prediction(
-            z_tri, start_ts).squeeze()
-        print("pred_prob_end:", pred_prob_end[0:10])
-        print("pred_prob_start:", pred_prob_start[0:10])
-        # pred_prob_end = torch.sigmoid(pred_prob_end)  # TODO: HERE
-        # pred_prob_start = torch.sigmoid(pred_prob_start)  # TODO: HERE
-        exist_prob = pred_prob_end - pred_prob_start  # -1 ~ 1
-
-        # exist_prob = torch.sigmoid(exist_prob)  # TODO: HERE
-        # pred_label = (exist_prob > 0.5 ).float()
-        pred_label = (exist_prob > 0.0).float()
-        print("pred_label          :", pred_label.shape)
-        print("torch.tensor(label) :", torch.tensor(label).shape)
-        # correct = (pred_label == label).sum()
-
-        print(pred_label[0:10])
-        print(torch.tensor(label)[0:10])
-        print((pred_label == torch.tensor(label))[0:10])
-        correct = (pred_label == torch.tensor(label)).sum()
-
-        # correct = (pred_label == label).float().sum()
-        # correct = np.array((pred_label == torch.tensor(label))).sum()
-
-        print("val:", pred_label)
-        print("np.unique(label, return_counts=True):",
-                np.unique(label, return_counts=True))
-        # AUC = roc_auc_score(label, exist_prob)
-        AUC = roc_auc_score(label, exist_prob.detach().numpy())
-        print(f'\nAUC is {round(AUC, 5)} '
-                f"Acc: {int(correct.item())}/{len(exist_prob)} = {correct.item() / len(exist_prob)}\n"
-                )
-
-        loss = loss_bce(torch.sigmoid(exist_prob), torch.tensor(label).float())
-        loss.backward()
-        optimizer.step()
-
-        # TODO: Write results for test set
-
-        # checkpoint = torch.load(
-        #     f'./checkpoints/model_{dataset_name}_{epoch:03d}.pth'
-        # )
-        # model.load_state_dict(checkpoint['state_dict'])
+            # exist_prob = torch.sigmoid(exist_prob)  # TODO: HERE
+            # pred_label = (exist_prob > 0.5).float()
 
 
+            # pred_label = (exist_prob > 0.0  ).float()
+            # print("pred_label          :", pred_label.shape)
+            # print("torch.tensor(label) :", torch.tensor(label).shape)
+            # correct = (pred_label == label).sum()
 
+            exist_prob = F.softmax(exist_prob, dim=1)
+            pred_label = torch.argmax(exist_prob, dim=1)
 
+            # print(pred_label[0:10])
+            # print(torch.tensor(label)[0:10])
+            # print((pred_label == torch.tensor(label))[0:10])
+            correct = (pred_label == torch.tensor(label)).sum()
+
+            # correct = (pred_label == label).float().sum()
+            # correct = np.array((pred_label == torch.tensor(label))).sum()
+
+            # print("val:", pred_label)
+            # print("np.unique(label, return_counts=True):", np.unique(label, return_counts=True))
+            # AUC = roc_auc_score(label, exist_prob)
+            AUC = roc_auc_score(label, pred_label)
+            print(f'\nAUC is {round(AUC, 5)} '
+                  f"Acc: {int(correct.item())}/{len(exist_prob)} = {correct.item() / len(exist_prob)}\n"
+                  )
+
+            # TODO: Write results for test set
+
+            # checkpoint = torch.load(
+            #     f'./checkpoints/model_{dataset_name}_{epoch:03d}.pth'
+            # )
+            # model.load_state_dict(checkpoint['state_dict'])
 
         # --------------------------------
         # TEST
@@ -449,10 +422,14 @@ if __name__ == '__main__':
             # pred_prob_end = torch.sigmoid(pred_prob_end)  # TODO: HERE
             # pred_prob_start = torch.sigmoid(pred_prob_start)  # TODO: HERE
             exist_prob = pred_prob_end - pred_prob_start
-            # exist_prob = torch.sigmoid(exist_prob)  # TODO: HERE
+            exist_prob = torch.softmax(exist_prob, dim=1)  # TODO: HERE
             # exist_prob = torch.clamp(exist_prob, min=0, max=1)
 
-            print("test:", exist_prob)
+            # print("test:", exist_prob)
+            exist_prob = torch.argmax(exist_prob, dim=1)
+            # print("test:", exist_prob)
+
+
             save_prob(exist_prob, start_datetime.strftime(
                 '%Y%m%d_%H%M%S'), epoch)
 

@@ -57,13 +57,14 @@ device = 'cpu'
 # device = torch.device('cuda:1')
 
 
-dataset_name = 'B'
+dataset_name = 'A'
 
 
 def save_prob(exist_prob, start_time, epoch=None):
-    results_dir = f'results/wsdm-2022/B/{start_time}/'
+    results_dir = f'results/wsdm-2022/A/{start_time}/'
     ensure_directory(results_dir)
-    with open(f"{results_dir}output_B_{epoch:03d}.csv", "a") as file_object:
+    
+    with open(f"{results_dir}output_A_{epoch:03d}.csv", "a") as file_object:
         for prob in exist_prob.tolist():
             file_object.write(str(prob) + ',\n')
             # if prob >= 0.5:
@@ -71,7 +72,7 @@ def save_prob(exist_prob, start_time, epoch=None):
             # else:
             #     file_object.write(str(0) + ',\n')
 
-    with open(f"{results_dir}output_B_{epoch:03d}_01.csv", "a") as file_object:
+    with open(f"{results_dir}output_A_{epoch:03d}_01.csv", "a") as file_object:
         for prob in exist_prob.tolist():
             # file_object.write(str(prob) + ',\n')
             if prob >= 0.5:
@@ -97,6 +98,8 @@ if __name__ == '__main__':
         # num_nodes: 869068, num_relations: 14
         num_nodes=num_nodes,  # B) sample_dataset.num_nodes
         num_relations=num_relations,  # B) sample_dataset.num_relations
+        node_feature_dict=dataset.node_feature_dict,
+        edge_type_feature_dict=dataset.edge_type_feature_dict,
     ).to(device)
 
     # criterion = nn.CrossEntropyLoss()
@@ -137,7 +140,7 @@ if __name__ == '__main__':
             num_neighbors=[-1] * 1,
             shuffle=True,
             input_nodes=None,
-            batch_size=1024*16
+            batch_size=1024
             # batch_size=1024*32
             # batch_size=1024*64
         )
@@ -268,10 +271,9 @@ if __name__ == '__main__':
             # print("exist_prob", exist_prob.shape)
             # print("pos_label", pos_label.shape)
 
-
             # loss2 = loss_bce2(exist_prob.squeeze(), pos_label.squeeze())
             # loss = loss + loss2
-
+            loss.backward()
 
 
             # pred_label = torch.sigmoid(prob)
@@ -280,7 +282,7 @@ if __name__ == '__main__':
 
 
             # loss = loss_bce(torch.sigmoid(exist_prob), torch.tensor(label).float())
-            loss.backward()
+            # loss.backward()
             optimizer.step()
 
             # exit()
@@ -321,7 +323,7 @@ if __name__ == '__main__':
         # with torch.no_grad():
 
         test_csv = pd.read_csv(
-            f"data/wsdm-2022/raw/test/input_B_initial.csv",
+            f"data/wsdm-2022/raw/test/input_A_initial.csv",
             names=['src', 'dst', 'type', 'start_at', 'end_at', 'exist']
         )
         # Load test_csv
@@ -410,7 +412,7 @@ if __name__ == '__main__':
         model.eval()
         with torch.no_grad():
             test_csv = pd.read_csv(
-                f"data/wsdm-2022/raw/test/input_B.csv",
+                f"data/wsdm-2022/raw/test/input_A.csv",
                 names=['src', 'dst', 'type', 'start_at', 'end_at']
             )
             # Load test_csv
@@ -449,7 +451,7 @@ if __name__ == '__main__':
             # pred_prob_end = torch.sigmoid(pred_prob_end)  # TODO: HERE
             # pred_prob_start = torch.sigmoid(pred_prob_start)  # TODO: HERE
             exist_prob = pred_prob_end - pred_prob_start
-            # exist_prob = torch.sigmoid(exist_prob)  # TODO: HERE
+            exist_prob = torch.sigmoid(exist_prob)  # TODO: HERE
             # exist_prob = torch.clamp(exist_prob, min=0, max=1)
 
             print("test:", exist_prob)

@@ -49,7 +49,8 @@ Heterogeneous / MetaPath2Vec
 - R-GCN
     - https://github.com/pyg-team/pytorch_geometric/blob/master/examples/rgcn_link_pred.py
     - https://github.com/JinheonBaek/RGCN/blob/master/models.py
--
+- Negative Sampling
+    - Robust Negative Sampling for Network Embedding
 
 ### Setup
 

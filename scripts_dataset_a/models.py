@@ -46,9 +46,12 @@ from torch_geometric.utils import batched_negative_sampling
 
 class TemporalGNN(torch.nn.Module):
 
-    def __init__(self, num_nodes, num_relations):
+    def __init__(self, num_nodes, num_relations, node_feature_dict, edge_type_feature_dict):
         super().__init__()
 
+
+        self.node_feature_dict = node_feature_dict
+        self.edge_type_feature_dict = edge_type_feature_dict
         # -----------------
         #     Dataset B
         # -----------------
@@ -92,7 +95,7 @@ class TemporalGNN(torch.nn.Module):
         nn.init.xavier_uniform_(self.emb_triplets.weight)
         nn.init.xavier_uniform_(self.emb_link.weight)
         nn.init.xavier_uniform_(self.emb_link2.weight)
-        nn.init.xavier_uniform_(self.node_embedding.weight)
+        # nn.init.xavier_uniform_(self.node_embedding.weight)
         nn.init.xavier_uniform_(self.fc_1.weight)
 
 
@@ -200,15 +203,15 @@ if __name__ == '__main__':
     print("--------------------")
     print("    MODELS (DEV)    ")
     print("--------------------")
-    dataset = LargeGraphDataset(dataset_name='B')
+    dataset = LargeGraphDataset(dataset_name='A')
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
 
     data = next(iter(dataloader))
 
     model = TemporalGNN(
         # num_nodes: 869068, num_relations: 14
-        num_nodes=869068 + 1,  # B) sample_dataset.num_nodes
-        num_relations=14 + 1,  # B) sample_dataset.num_relations
+        num_nodes=69984,  # A) sample_dataset.num_nodes
+        num_relations=248,  # A) sample_dataset.num_relations
     )
     # model = model  #.to(params['device'])
 
